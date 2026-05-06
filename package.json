@@ -12,5 +12,11 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "devDependencies": {
+    "@mariozechner/pi-ai": "^0.73.0",
+    "@mariozechner/pi-coding-agent": "^0.73.0",
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   }
 }
