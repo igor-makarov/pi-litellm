@@ -193,7 +193,7 @@ export default async function (pi: ExtensionAPI) {
 
 	pi.registerProvider("litellm", {
 		baseUrl,
-		apiKey: "LITELLM_API_KEY",
+		apiKey: "$LITELLM_API_KEY",
 		models: state.models.map(({ _source: _source, ...model }) => model),
 	});
 }
