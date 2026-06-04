@@ -18,7 +18,7 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 const DEFAULT_BASE_URL = "http://localhost:4000/v1";
-const PROVIDERS = ["anthropic", "openai", "google", "opencode"] as const;
+const PROVIDERS = ["anthropic", "openai", "google", "opencode", "opencode-go"] as const;
 const LABEL = "📡 LiteLLM";
 
 type PiModel = Model<Api>;
@@ -50,7 +50,7 @@ const fetchAvailableIds = async (baseUrl: string, apiKey?: string): Promise<stri
 };
 
 const buildModels = (availableIds: Set<string>): LiteLLMModelDebug[] => {
-	// Exact-match against anthropic / openai / google / opencode.
+	// Exact-match against anthropic / openai / google / opencode / opencode-go.
 	// Strip `provider` and `baseUrl` — pi.registerProvider re-sets provider to
 	// "litellm" and per-model baseUrl would override the LiteLLM proxy URL.
 	const exactMatched = new Set<string>();
