@@ -2,8 +2,8 @@
  * LiteLLM Provider Extension
  *
  * Fetches available models from LiteLLM's /v1/models endpoint, then
- * matches them against pi's built-in model metadata for Anthropic,
- * OpenAI, and Google providers.
+ * matches them against pi's built-in model metadata for Amazon Bedrock,
+ * Azure OpenAI, Anthropic, OpenAI, and Google providers.
  *
  * Usage:
  *   LITELLM_BASE_URL=https://litellm.example.com LITELLM_API_KEY=sk-... pi -e ~/private/pi-extension-litellm
@@ -18,7 +18,8 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 const DEFAULT_BASE_URL = "http://localhost:4000/v1";
-const PROVIDERS = ["anthropic", "openai", "google", "opencode", "opencode-go"] as const;
+const AZURE_PROVIDER = "azure-openai-responses";
+const FALLBACK_PROVIDERS = ["anthropic", "openai", "google", "opencode", "opencode-go"] as const;
 const LABEL = "📡 LiteLLM";
 
 type PiModel = Model<Api>;
@@ -50,39 +51,51 @@ const fetchAvailableIds = async (baseUrl: string, apiKey?: string): Promise<stri
 };
 
 const buildModels = (availableIds: Set<string>): LiteLLMModelDebug[] => {
-	// Exact-match against anthropic / openai / google / opencode / opencode-go.
 	// Strip `provider` and `baseUrl` — pi.registerProvider re-sets provider to
 	// "litellm" and per-model baseUrl would override the LiteLLM proxy URL.
-	const exactMatched = new Set<string>();
-	const models: LiteLLMModelDebug[] = PROVIDERS.flatMap((provider) =>
-		getModels(provider)
-			.filter((model) => availableIds.has(model.id) && !exactMatched.has(model.id))
-			.map(({ provider: _p, baseUrl: _b, ...rest }) => {
-				exactMatched.add(rest.id);
-				return { ...rest, _source: provider };
-			}),
-	);
+	const matched = new Set<string>();
+	const models: LiteLLMModelDebug[] = [];
 
-	// Fuzzy-match remaining LiteLLM IDs against amazon-bedrock metadata.
-	// Slug normalisation handles prefix aliases ("qwen." → "") and version
-	// suffixes ("-v1:0" → "") so that e.g.:
-	//   LiteLLM "qwen-3-coder-480b-a35b"  ↔  pi "qwen.qwen3-coder-480b-a35b-v1:0"
-	//   LiteLLM "minimax-m2"              ↔  pi "minimax.minimax-m2"
-	const slugMap = new Map<string, PiModel>();
-	for (const model of getModels("amazon-bedrock")) {
-		slugMap.set(slugify(model.id), model);
-	}
-	for (const litellmId of availableIds) {
-		if (exactMatched.has(litellmId)) continue;
-		const piModel = slugMap.get(slugify(litellmId));
-		if (!piModel) continue;
+	const addModel = (litellmId: string, piModel: PiModel, source: string) => {
+		if (matched.has(litellmId)) return;
 		const { provider: _p, baseUrl: _b, ...rest } = piModel;
+		matched.add(litellmId);
 		models.push({
 			...rest,
 			id: litellmId,
-			api: rest.api === "bedrock-converse-stream" ? "openai-completions" : rest.api,
-			_source: `bedrock-fuzzy(${piModel.id})`,
+			api:
+				rest.api === "bedrock-converse-stream"
+					? "openai-completions"
+					: rest.api === "azure-openai-responses"
+						? "openai-responses"
+						: rest.api,
+			_source: source,
 		});
+	};
+
+	// Search Bedrock first. Slug normalisation handles prefix aliases
+	// ("qwen." → "") and version suffixes ("-v1:0" → "") so that e.g.:
+	//   LiteLLM "qwen-3-coder-480b-a35b"  ↔  pi "qwen.qwen3-coder-480b-a35b-v1:0"
+	//   LiteLLM "minimax-m2"              ↔  pi "minimax.minimax-m2"
+	const bedrockSlugMap = new Map<string, PiModel>();
+	for (const model of getModels("amazon-bedrock")) {
+		bedrockSlugMap.set(slugify(model.id), model);
+	}
+	for (const litellmId of availableIds) {
+		const piModel = bedrockSlugMap.get(slugify(litellmId));
+		if (piModel) addModel(litellmId, piModel, `bedrock-fuzzy(${piModel.id})`);
+	}
+
+	// Then exact-match Azure OpenAI before the remaining providers.
+	for (const model of getModels(AZURE_PROVIDER)) {
+		if (availableIds.has(model.id)) addModel(model.id, model, AZURE_PROVIDER);
+	}
+
+	// Finally exact-match the rest of the built-in metadata providers.
+	for (const provider of FALLBACK_PROVIDERS) {
+		for (const model of getModels(provider)) {
+			if (availableIds.has(model.id)) addModel(model.id, model, provider);
+		}
 	}
 
 	return models;
