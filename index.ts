@@ -13,9 +13,9 @@
  * Then use /model to select any model under the "litellm" provider.
  */
 
-import { getModels } from "@mariozechner/pi-ai";
-import type { Api, Model } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_BASE_URL = "http://localhost:4000/v1";
 const AZURE_PROVIDER = "azure-openai-responses";
@@ -78,7 +78,7 @@ const buildModels = (availableIds: Set<string>): LiteLLMModelDebug[] => {
 	//   LiteLLM "qwen-3-coder-480b-a35b"  ↔  pi "qwen.qwen3-coder-480b-a35b-v1:0"
 	//   LiteLLM "minimax-m2"              ↔  pi "minimax.minimax-m2"
 	const bedrockSlugMap = new Map<string, PiModel>();
-	for (const model of getModels("amazon-bedrock")) {
+	for (const model of getBuiltinModels("amazon-bedrock")) {
 		bedrockSlugMap.set(slugify(model.id), model);
 	}
 	for (const litellmId of availableIds) {
@@ -87,13 +87,13 @@ const buildModels = (availableIds: Set<string>): LiteLLMModelDebug[] => {
 	}
 
 	// Then exact-match Azure OpenAI before the remaining providers.
-	for (const model of getModels(AZURE_PROVIDER)) {
+	for (const model of getBuiltinModels(AZURE_PROVIDER)) {
 		if (availableIds.has(model.id)) addModel(model.id, model, AZURE_PROVIDER);
 	}
 
 	// Finally exact-match the rest of the built-in metadata providers.
 	for (const provider of FALLBACK_PROVIDERS) {
-		for (const model of getModels(provider)) {
+		for (const model of getBuiltinModels(provider)) {
 			if (availableIds.has(model.id)) addModel(model.id, model, provider);
 		}
 	}
